@@ -1,49 +1,97 @@
 # Media Reducer
 
-Compress images and videos in your browser. Upload files, click **Reduce**, download a ZIP with your compressed files — original filenames preserved.
+Compress images and videos locally or in your browser. Upload files, click **Reduce**, download a ZIP with your compressed files — original filenames preserved.
 
 ## Features
 
 - **Images** — JPEG, PNG, WebP, GIF compression (Pillow)
 - **Videos** — H.264 re-encode at CRF 23, capped at 1080p (FFmpeg)
 - **Optional WebP conversion** — convert all images to WebP for maximum size reduction
+- **Aggressive mode** — resize images to 2000px max, lower quality for smallest file size
 - Drag & drop or click to browse
 - Batch processing — multiple files at once
 - Downloads as a single ZIP: `reduced_{timestamp}/`
+- Dark / light / system theme
+
+---
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | React 18 + TypeScript + Vite + Tailwind CSS v4 |
+| Desktop shell | Tauri v2 (Rust) |
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS v4 |
 | Backend | Python 3.11 + FastAPI + Uvicorn |
 | Image compression | Pillow |
 | Video compression | ffmpeg-python + FFmpeg |
-| Frontend hosting | GitHub Pages |
-| Backend hosting | Render.com (free tier) |
+| Web hosting (optional) | GitHub Pages + Render.com |
 
 ---
 
-## Local Development
+## Desktop App (Tauri)
+
+The app runs as a native desktop application. Tauri wraps the React frontend and automatically starts the FastAPI backend as a bundled sidecar process.
+
+### Prerequisites
+
+| Tool | Install |
+|------|---------|
+| Rust + Cargo | `winget install Rustlang.Rustup` or [rustup.rs](https://rustup.rs) |
+| Node.js 18+ | [nodejs.org](https://nodejs.org) |
+| Python 3.11+ | [python.org](https://python.org) |
+| FFmpeg | `winget install ffmpeg` or [ffmpeg.org](https://ffmpeg.org/download.html) |
+| Microsoft C++ Build Tools | Required by Rust on Windows — [download](https://visualstudio.microsoft.com/visual-cpp-build-tools/) |
+
+### First-time setup
+
+Run the setup script from the project root. It installs all dependencies, bundles the Python backend with PyInstaller, and generates app icons:
+
+```powershell
+./setup_desktop.ps1
+```
+
+### Development
+
+```powershell
+cd frontend
+npm run tauri:dev
+```
+
+Vite starts on port 1420, Tauri opens the desktop window, and the FastAPI backend starts automatically.
+
+### Production build
+
+```powershell
+cd frontend
+npm run tauri:build
+```
+
+The installer is output to:
+
+```
+frontend/src-tauri/target/release/bundle/
+  msi/          ← Windows installer (.msi)
+  nsis/         ← Windows installer (.exe)
+```
+
+---
+
+## Local Web Development (no Tauri)
+
+Run the frontend and backend separately for rapid iteration without rebuilding the Rust shell.
 
 ### Backend
 
 ```bash
 cd backend
 
-# Create a virtual environment
 python -m venv .venv
-.venv\Scripts\activate      # Windows
-# source .venv/bin/activate  # macOS/Linux
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
 
-# Install dependencies (FFmpeg must be installed on your system)
 pip install -r requirements.txt
-
-# Run
 uvicorn main:app --reload --port 8000
 ```
-
-> FFmpeg must be installed on your system. Download from https://ffmpeg.org/download.html
 
 ### Frontend
 
@@ -53,28 +101,25 @@ npm install
 npm run dev
 ```
 
-The app opens at `http://localhost:5173`. It calls `http://localhost:8000` by default (set in `.env`).
+Open `http://localhost:1420`. The frontend calls `http://localhost:8000` by default.
 
 ---
 
-## Deployment
+## Cloud Deployment (Web)
 
 ### Backend → Render.com
 
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → **New Web Service**
-3. Connect your GitHub repo
-4. Render auto-detects `render.yaml` — click **Deploy**
-5. Copy the deployed URL (e.g. `https://media-reducer-api.onrender.com`)
+1. Push this repo to GitHub.
+2. Go to [render.com](https://render.com) → **New Web Service**.
+3. Connect your repo — Render auto-detects `backend/render.yaml`.
+4. Click **Deploy** and copy the deployed URL.
 
 ### Frontend → GitHub Pages
 
-1. In your GitHub repo → **Settings → Secrets and variables → Actions**, add:
-   - `VITE_API_URL` = your Render backend URL
-   - `VITE_BASE_PATH` = `/{your-repo-name}/`  *(e.g. `/media-reducer/`)*
-
-2. Go to **Settings → Pages** → set source to **Deploy from a branch** → branch: `gh-pages`
-
+1. In your repo → **Settings → Secrets and variables → Actions**, add:
+   - `VITE_API_URL` — your Render backend URL
+   - `VITE_BASE_PATH` — `/{repo-name}/` (e.g. `/media-reducer/`)
+2. Go to **Settings → Pages** → source: **Deploy from a branch** → `gh-pages`.
 3. Push to `main` — GitHub Actions builds and deploys automatically.
 
 ---
@@ -83,20 +128,34 @@ The app opens at `http://localhost:5173`. It calls `http://localhost:8000` by de
 
 ```
 media-reducer/
-├── frontend/                 # React + Vite
+├── frontend/                        # React + Vite app
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── DropZone.tsx
 │   │   │   ├── FileList.tsx
-│   │   │   └── ProgressBar.tsx
-│   │   ├── api.ts
+│   │   │   ├── ProgressBar.tsx
+│   │   │   └── ResultsPanel.tsx
+│   │   ├── api.ts                   # HTTP client (axios + JSZip)
 │   │   └── App.tsx
-│   └── vite.config.ts
+│   ├── src-tauri/                   # Tauri / Rust shell
+│   │   ├── src/
+│   │   │   ├── main.rs              # Binary entry point
+│   │   │   └── lib.rs               # Sidecar spawn + window lifecycle
+│   │   ├── capabilities/
+│   │   │   └── default.json         # Shell permissions
+│   │   ├── binaries/                # PyInstaller backend binary (git-ignored)
+│   │   ├── icons/                   # App icons (generated by setup script)
+│   │   ├── Cargo.toml
+│   │   └── tauri.conf.json
+│   ├── vite.config.ts
+│   └── package.json
 ├── backend/
-│   ├── main.py               # FastAPI routes
-│   ├── compressor.py         # Pillow + ffmpeg logic
-│   ├── requirements.txt
-│   └── render.yaml
+│   ├── main.py                      # FastAPI routes
+│   ├── compressor.py                # Pillow + FFmpeg logic
+│   ├── requirements.txt             # Runtime dependencies
+│   ├── requirements-dev.txt         # PyInstaller (build only)
+│   └── build_backend.ps1            # PyInstaller build script
+├── setup_desktop.ps1                # One-time desktop setup
 └── .github/workflows/
-    └── deploy.yml            # Auto-deploy to GitHub Pages
+    └── deploy.yml                   # Auto-deploy to GitHub Pages
 ```

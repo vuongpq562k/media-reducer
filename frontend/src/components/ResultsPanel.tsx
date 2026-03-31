@@ -1,4 +1,4 @@
-import { Download, FileImage, FileVideo, Archive } from 'lucide-react'
+import { Download, FileImage, FileVideo, Archive, RotateCcw } from 'lucide-react'
 import type { ReducedFile, ReducedResult } from '../api'
 import { downloadBlob } from '../api'
 
@@ -53,12 +53,6 @@ export default function ResultsPanel({ result, onReset }: Props) {
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500">Total size: {formatBytes(totalSize)}</p>
         </div>
-        <button
-          onClick={onReset}
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-700 hover:underline dark:text-slate-500 dark:hover:text-slate-300"
-        >
-          Reduce more files
-        </button>
       </div>
 
       {/* Individual file list */}
@@ -76,6 +70,15 @@ export default function ResultsPanel({ result, onReset }: Props) {
         <Archive size={16} />
         Download all as ZIP
         <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">({result.zipFilename})</span>
+      </button>
+
+      {/* Reload / back to upload */}
+      <button
+        onClick={onReset}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300 dark:hover:bg-slate-700/50"
+      >
+        <RotateCcw size={15} />
+        Compress more files
       </button>
 
     </div>
