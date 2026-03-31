@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 # Ensure WinGet-installed tools (ffmpeg, etc.) are always on PATH on Windows
 _winget_links = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links")
@@ -29,7 +30,7 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/api/health")
 def health():
     return {"status": "ok"}
 
@@ -102,3 +103,10 @@ async def reduce_files(
                 "Content-Disposition": f'attachment; filename="{zip_filename}"',
             },
         )
+
+
+# Serve React frontend when dist/ exists (single-app deploy on Render/Fly.io)
+# Must be mounted AFTER all API routes so /api/* routes take priority.
+_dist = Path(__file__).parent / "dist"
+if _dist.exists():
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="static")
