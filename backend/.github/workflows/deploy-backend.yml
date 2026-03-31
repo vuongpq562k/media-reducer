@@ -1,0 +1,61 @@
+name: Deploy Backend to Cloud Run
+ 
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+ 
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}          # e.g. us-central1
+  SERVICE: media-reducer-api
+  IMAGE: media-reducer-api
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write                         # needed for Workload Identity
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+ 
+      # ── Auth ──────────────────────────────────────────────────────────────
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+ 
+      # ── Docker → Artifact Registry ───────────────────────────────────────
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+ 
+      - name: Build and push image
+        run: |
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.IMAGE }}:${{ github.sha }}"
+          docker build -t "$IMAGE_URI" ./backend
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+ 
+      # ── Deploy ────────────────────────────────────────────────────────────
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE_URI }}
+          flags: >-
+            --allow-unauthenticated
+            --memory=1Gi
+            --cpu=2
+            --concurrency=4
+            --min-instances=0
+            --max-instances=3
+            --timeout=3600
+            --set-env-vars=ENVIRONMENT=production
+ 
