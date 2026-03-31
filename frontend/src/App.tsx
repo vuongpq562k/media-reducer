@@ -8,21 +8,21 @@ import DropZone from './components/DropZone'
 import FileList from './components/FileList'
 import ProgressBar from './components/ProgressBar'
 import ResultsPanel from './components/ResultsPanel'
-import { reduceFiles } from './api'
-import type { VideoSize, ReducedResult } from './api'
-
+import { reduceFilesInBatches } from './api'
+import type { VideoSize, ReducedResult, BatchProgress } from './api'
+ 
 type Theme = 'light' | 'dark' | 'system'
-
+ 
 function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) ?? 'system'
   })
-
+ 
   useEffect(() => {
     const applyDark = (dark: boolean) => {
       document.documentElement.classList.toggle('dark', dark)
     }
-
+ 
     if (theme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
       applyDark(mq.matches)
@@ -33,17 +33,17 @@ function useTheme() {
       applyDark(theme === 'dark')
     }
   }, [theme])
-
+ 
   const setTheme = (t: Theme) => {
     localStorage.setItem('theme', t)
     setThemeState(t)
   }
-
+ 
   return { theme, setTheme }
 }
-
+ 
 const themeOrder: Theme[] = ['system', 'light', 'dark']
-
+ 
 interface BgIcon {
   Icon: LucideIcon
   x: number
@@ -55,7 +55,7 @@ interface BgIcon {
   animation: 'float-icon' | 'float-icon-rev' | 'sway'
   color: string
 }
-
+ 
 const BG_ICONS: BgIcon[] = [
   { Icon: ImageIcon,    x:  3,  y: 10, size: 56, opacity: 0.28, duration: 16, delay: 0,   animation: 'float-icon',     color: '#3b82f6' },
   { Icon: VideoIcon,    x: 88,  y:  7, size: 52, opacity: 0.25, duration: 20, delay: 3,   animation: 'float-icon-rev', color: '#8b5cf6' },
@@ -76,7 +76,7 @@ const BG_ICONS: BgIcon[] = [
   { Icon: Music,        x: 54,  y: 74, size: 42, opacity: 0.21, duration: 16, delay: 10,  animation: 'float-icon-rev', color: '#6366f1' },
   { Icon: Clapperboard, x: 37,  y: 93, size: 52, opacity: 0.23, duration: 20, delay: 1,   animation: 'sway',           color: '#f59e0b' },
 ]
-
+ 
 function BackgroundIcons() {
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
@@ -98,11 +98,11 @@ function BackgroundIcons() {
     </div>
   )
 }
-
+ 
 function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
   const next = themeOrder[(themeOrder.indexOf(theme) + 1) % themeOrder.length]
   const labels: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' }
-
+ 
   return (
     <button
       onClick={() => setTheme(next)}
@@ -116,7 +116,7 @@ function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) =
     </button>
   )
 }
-
+ 
 function Toggle({
   label,
   description,
@@ -159,7 +159,7 @@ function Toggle({
     </div>
   )
 }
-
+ 
 export default function App() {
   const { theme, setTheme } = useTheme()
   const [files, setFiles] = useState<File[]>([])
@@ -167,15 +167,16 @@ export default function App() {
   const [aggressive, setAggressive] = useState(true)
   const [videoSize, setVideoSize] = useState<VideoSize>('1280')
   const [loading, setLoading] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ReducedResult | null>(null)
-
+ 
   useEffect(() => {
     return () => {
       result?.files.forEach(f => URL.revokeObjectURL(f.url))
     }
   }, [result])
-
+ 
   const handleAddFiles = (incoming: File[]) => {
     setError(null)
     setFiles(prev => {
@@ -183,41 +184,49 @@ export default function App() {
       return [...prev, ...incoming.filter(f => !existing.has(f.name))]
     })
   }
-
+ 
   const handleRemove = (name: string) => {
     setFiles(prev => prev.filter(f => f.name !== name))
   }
-
+ 
   const handleReduce = async () => {
     if (!files.length) return
     setLoading(true)
+    setBatchProgress(null)
     setError(null)
     setResult(null)
     try {
-      const r = await reduceFiles(files, convertToWebp, aggressive, videoSize)
+      const r = await reduceFilesInBatches(
+        files,
+        convertToWebp,
+        aggressive,
+        videoSize,
+        (progress) => setBatchProgress(progress),
+      )
       setResult(r)
       setFiles([])
     } catch {
       setError('Something went wrong. Make sure the backend is running and try again.')
     } finally {
       setLoading(false)
+      setBatchProgress(null)
     }
   }
-
+ 
   const handleReset = () => {
     setResult(null)
     setError(null)
     setFiles([])
   }
-
+ 
   const hasImages = files.some(f => f.type.startsWith('image/'))
   const hasVideos = files.some(f => f.type.startsWith('video/'))
-
+ 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-100 flex items-center justify-center p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <BackgroundIcons />
       <div className="relative z-10 w-full max-w-2xl">
-
+ 
         {/* Header */}
         <div className="mb-8 text-center relative">
           <div className="absolute right-0 top-0">
@@ -229,20 +238,20 @@ export default function App() {
           <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">Media Reducer</h1>
           <p className="mt-2 text-slate-500 dark:text-slate-400">Compress images & videos — keep quality, lose the weight.</p>
         </div>
-
+ 
         {/* Card */}
         <div className="space-y-5 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/50">
-
+ 
           {result ? (
             <ResultsPanel result={result} onReset={handleReset} />
           ) : (
             <>
               <DropZone onFilesAdded={handleAddFiles} disabled={loading} />
-
+ 
               {files.length > 0 && (
                 <FileList files={files} onRemove={handleRemove} disabled={loading} />
               )}
-
+ 
               {/* Image options */}
               {hasImages && (
                 <div className="space-y-2">
@@ -263,7 +272,7 @@ export default function App() {
                   />
                 </div>
               )}
-
+ 
               {/* Video size options */}
               {hasVideos && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-700/30">
@@ -294,17 +303,25 @@ export default function App() {
                   </div>
                 </div>
               )}
-
+ 
               {/* Progress */}
-              {loading && <ProgressBar />}
-
+              {loading && (
+                <ProgressBar
+                  label={
+                    batchProgress && batchProgress.total > 1
+                      ? `Processing batch ${batchProgress.done} of ${batchProgress.total}…`
+                      : undefined
+                  }
+                />
+              )}
+ 
               {/* Error */}
               {error && (
                 <div className="rounded-lg border border-red-400/50 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                   {error}
                 </div>
               )}
-
+ 
               {/* Reduce button */}
               <button
                 onClick={handleReduce}
@@ -322,9 +339,9 @@ export default function App() {
               </button>
             </>
           )}
-
+ 
         </div>
-
+ 
         <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-600">
           Files are processed on the server and never stored permanently.
         </p>
