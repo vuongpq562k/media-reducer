@@ -40,21 +40,21 @@ export default function DropZone({ onFilesAdded, disabled }: Props) {
       className={[
         'relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors',
         disabled
-          ? 'cursor-not-allowed border-slate-700 bg-slate-800/30'
+          ? 'cursor-not-allowed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30'
           : dragging
-          ? 'cursor-copy border-blue-400 bg-blue-500/10'
-          : 'cursor-pointer border-slate-600 bg-slate-800/30 hover:border-slate-400 hover:bg-slate-700/30',
+          ? 'cursor-copy border-blue-400 bg-blue-50 dark:bg-blue-500/10'
+          : 'cursor-pointer border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/30 dark:hover:border-slate-400 dark:hover:bg-slate-700/30',
       ].join(' ')}
     >
       <UploadCloud
         size={40}
-        className={dragging ? 'text-blue-400' : 'text-slate-400'}
+        className={dragging ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400'}
       />
       <div>
-        <p className="text-sm font-medium text-slate-200">
-          Drop files here or <span className="text-blue-400">browse</span>
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+          Drop files here or <span className="text-blue-500 dark:text-blue-400">browse</span>
         </p>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
           Images: JPG · PNG · WebP · GIF &nbsp;|&nbsp; Videos: MP4 · MOV · AVI · MKV
         </p>
       </div>

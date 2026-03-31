@@ -1,5 +1,7 @@
 import io
+import os
 import time
+import shutil
 import zipfile
 import tempfile
 from pathlib import Path
@@ -8,9 +10,15 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+# Ensure WinGet-installed tools (ffmpeg, etc.) are always on PATH on Windows
+_winget_links = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links")
+if os.path.isdir(_winget_links) and _winget_links not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = _winget_links + os.pathsep + os.environ.get("PATH", "")
+
 from compressor import compress_image, compress_video, is_image, is_video
 
 app = FastAPI(title="Media Reducer API")
+print(f"[STARTUP] ffmpeg path: {shutil.which('ffmpeg')}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,11 +38,15 @@ def health():
 async def reduce_files(
     files: list[UploadFile] = File(...),
     convert_to_webp: str = Form("false"),
+    aggressive: str = Form("false"),
+    video_size: str = Form("1280"),
 ):
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
 
     do_webp = convert_to_webp.lower() == "true"
+    do_aggressive = aggressive.lower() == "true"
+    do_video_size = video_size if video_size in ("original", "1280", "480") else "1280"
     ts = int(time.time())
     folder_name = f"reduced_{ts}"
 
@@ -57,13 +69,16 @@ async def reduce_files(
 
             try:
                 if is_image(filename):
-                    compress_image(input_path, output_dir, convert_to_webp=do_webp)
+                    compress_image(input_path, output_dir, convert_to_webp=do_webp, aggressive=do_aggressive)
                 elif is_video(filename):
-                    compress_video(input_path, output_dir)
+                    compress_video(input_path, output_dir, video_size=do_video_size)
                 else:
                     errors.append(f"{filename}: unsupported type")
             except Exception as exc:
                 errors.append(f"{filename}: {exc}")
+
+        if errors:
+            print(f"[DEBUG] Compression errors: {errors}")
 
         if not any(output_dir.iterdir()):
             raise HTTPException(
