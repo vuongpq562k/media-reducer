@@ -1,32 +1,9 @@
 ﻿services:
-
-  # Backend: FastAPI (free tier - sleeps after 15 min idle)
   - type: web
     name: media-reducer-api
     env: python
-    plan: free
-    rootDir: backend
     buildCommand: "apt-get install -y ffmpeg && pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port 10000"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-
-  # Frontend: React static site (always on, completely free)
-  # Set VITE_API_URL in Render dashboard AFTER backend is deployed.
-  - type: web
-    name: media-reducer-web
-    env: static
-    plan: free
-    rootDir: frontend
-    buildCommand: "npm ci && npm run build"
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        sync: false
-      - key: VITE_BASE_PATH
-        value: "/"
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
